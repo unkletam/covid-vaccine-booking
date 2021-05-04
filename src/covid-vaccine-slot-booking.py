@@ -2,6 +2,8 @@ from collections import Counter
 import requests, sys, argparse, os
 from utils import generate_token_OTP, get_beneficiaries, check_and_book, get_districts, get_min_age, beep, \
     BENEFICIARIES_URL, WARNING_BEEP_DURATION
+from utils_pin import generate_token_OTP_pin, get_beneficiaries_pin, check_and_book_pin, get_districts_pin, get_min_age_pin, beep_pin, \
+    BENEFICIARIES_URL, WARNING_BEEP_DURATION
 
 
 def main():
@@ -15,13 +17,13 @@ def main():
             token = args.token
         else:
             mobile = input("Enter the registered mobile number: ")
-            token = generate_token_OTP(mobile)
+            token = generate_token_OTP_pin(mobile)
 
         request_header = {"Authorization": f"Bearer {token}"}
 
         # Get Beneficiaries
         print("Fetching registered beneficiaries.. ")
-        beneficiary_dtls = get_beneficiaries(request_header)
+        beneficiary_dtls = get_beneficiaries_pin(request_header)
 
         if len(beneficiary_dtls) == 0:
             print("There should be at least one beneficiary. Exiting.")
@@ -38,47 +40,101 @@ def main():
             sys.exit(1)
 
         # Collect vaccination center preferance
-        district_dtls = get_districts()
+        mode = int(input("""
+        ##########################################
 
-        # Set filter condition
-        minimum_slots = int(input('Filter out centers with availability less than: '))
-        minimum_slots = minimum_slots if minimum_slots > len(beneficiary_dtls) else len(beneficiary_dtls)
+                SELECT MODE OF BOOKING
+                
+        1. Enter 0 for District wise search
+        2. Enter 1 for Pincode wise search
+        
+        ##########################################
+        """))
+        if mode == 0:
+            district_dtls = get_districts()
+            # Set filter condition
+            minimum_slots = int(input('Filter out centers with availability less than: '))
+            minimum_slots = minimum_slots if minimum_slots > len(beneficiary_dtls) else len(beneficiary_dtls)
 
-        token_valid = True
-        while token_valid:
-            request_header = {"Authorization": f"Bearer {token}"}
+            token_valid = True
+            while token_valid:
+                request_header = {"Authorization": f"Bearer {token}"}
 
-            # call function to check and book slots
-            token_valid = check_and_book(request_header, beneficiary_dtls, district_dtls, minimum_slots)
+                # call function to check and book slots
+                token_valid = check_and_book(request_header, beneficiary_dtls, district_dtls, minimum_slots)
 
-            # check if token is still valid
-            beneficiaries_list = requests.get(BENEFICIARIES_URL, headers=request_header)
-            if beneficiaries_list.status_code == 200:
-                token_valid = True
+                # check if token is still valid
+                beneficiaries_list = requests.get(BENEFICIARIES_URL, headers=request_header)
+                if beneficiaries_list.status_code == 200:
+                    token_valid = True
 
-            else:
-                # if token invalid, regenerate OTP and new token
-                beep(WARNING_BEEP_DURATION[0], WARNING_BEEP_DURATION[1])
-                print('Token is INVALID.')
-                token_valid = False
+                else:
+                    # if token invalid, regenerate OTP and new token
+                    beep(WARNING_BEEP_DURATION[0], WARNING_BEEP_DURATION[1])
+                    print('Token is INVALID.')
+                    token_valid = False
 
-                tryOTP = input('Try for a new Token? (y/n): ')
-                if tryOTP.lower() == 'y':
-                    if mobile:
-                        tryOTP = input(f"Try for OTP with mobile number {mobile}? (y/n) : ")
-                        if tryOTP.lower() == 'y':
+                    tryOTP = input('Try for a new Token? (y/n): ')
+                    if tryOTP.lower() == 'y':
+                        if mobile:
+                            tryOTP = input(f"Try for OTP with mobile number {mobile}? (y/n) : ")
+                            if tryOTP.lower() == 'y':
+                                token = generate_token_OTP(mobile)
+                                token_valid = True
+                            else:
+                                token_valid = False
+                                print("Exiting")
+                        else:
+                            mobile = input(f"Enter 10 digit mobile number for new OTP generation? : ")
                             token = generate_token_OTP(mobile)
                             token_valid = True
-                        else:
-                            token_valid = False
-                            print("Exiting")
                     else:
-                        mobile = input(f"Enter 10 digit mobile number for new OTP generation? : ")
-                        token = generate_token_OTP(mobile)
-                        token_valid = True
+                        print("Exiting")
+                        os.system("pause")
+            
+
+        else:
+            pincode = int(input("Enter Pincode: "))
+
+            # Set filter condition
+            minimum_slots = int(input('Filter out centers with availability less than: '))
+            minimum_slots = minimum_slots if minimum_slots > len(beneficiary_dtls) else len(beneficiary_dtls)
+
+            token_valid = True
+            while token_valid:
+                request_header = {"Authorization": f"Bearer {token}"}
+
+                # call function to check and book slots
+                token_valid = check_and_book_pin(request_header, beneficiary_dtls, pincode, minimum_slots)
+
+                # check if token is still valid
+                beneficiaries_list = requests.get(BENEFICIARIES_URL, headers=request_header)
+                if beneficiaries_list.status_code == 200:
+                    token_valid = True
+
                 else:
-                    print("Exiting")
-                    os.system("pause")
+                    # if token invalid, regenerate OTP and new token
+                    beep_pin(WARNING_BEEP_DURATION[0], WARNING_BEEP_DURATION[1])
+                    print('Token is INVALID.')
+                    token_valid = False
+
+                    tryOTP = input('Try for a new Token? (y/n): ')
+                    if tryOTP.lower() == 'y':
+                        if mobile:
+                            tryOTP = input(f"Try for OTP with mobile number {mobile}? (y/n) : ")
+                            if tryOTP.lower() == 'y':
+                                token = generate_token_OTP_pin(mobile)
+                                token_valid = True
+                            else:
+                                token_valid = False
+                                print("Exiting")
+                        else:
+                            mobile = input(f"Enter 10 digit mobile number for new OTP generation? : ")
+                            token = generate_token_OTP_pin(mobile)
+                            token_valid = True
+                    else:
+                        print("Exiting")
+                        os.system("pause")
 
     except Exception as e:
         print(str(e))
